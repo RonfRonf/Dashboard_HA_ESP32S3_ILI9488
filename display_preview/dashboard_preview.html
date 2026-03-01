@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32-S3 Dashboard Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #060810;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Space Grotesk', sans-serif;
+    color: #E6EDF3;
+    overflow-x: hidden;
+  }
+
+  .page-title {
+    font-size: 13px;
+    color: #8B949E;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── DEVICE FRAME ── */
+  .device-frame {
+    position: relative;
+    background: #1a1a1a;
+    border-radius: 18px;
+    padding: 20px 22px;
+    box-shadow:
+      0 0 0 1px #2a2a2a,
+      0 30px 80px rgba(0,0,0,0.8),
+      0 0 60px rgba(88,166,255,0.04);
+  }
+
+  .device-label {
+    text-align: center;
+    font-size: 10px;
+    color: #333;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .screen-bezel {
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 0 0 1px #000, 0 0 30px rgba(0,0,0,0.5);
+  }
+
+  /* ── DISPLAY 480x320 ── */
+  .display {
+    width: 480px;
+    height: 320px;
+    background: #0D1117;
+    position: relative;
+    overflow: hidden;
+    cursor: default;
+    user-select: none;
+  }
+
+  /* ── PAGES ── */
+  .page {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: #0D1117;
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .page.active { transform: translateX(0); }
+  .page.left   { transform: translateX(-100%); }
+  .page.right  { transform: translateX(100%); }
+
+  /* ── HEADER ── */
+  .header {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 46px;
+    background: #161B22;
+    border-bottom: 1px solid #21262D;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    justify-content: space-between;
+    z-index: 2;
+  }
+  .header-title {
+    font-size: 17px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .header-sub {
+    font-size: 11px;
+    color: #8B949E;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── CARDS ── */
+  .card {
+    position: absolute;
+    background: #161B22;
+    border: 1px solid #21262D;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .card-title {
+    font-size: 10px;
+    color: #8B949E;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 10px 12px 4px;
+  }
+
+  /* ── GAUGE ARC ── */
+  .gauge-wrap { position: relative; width: 100%; display: flex; justify-content: center; margin-top: 8px; }
+  .gauge-value {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -55%);
+    font-size: 36px;
+    font-weight: 700;
+    color: #E6EDF3;
+    letter-spacing: -1px;
+  }
+  .gauge-unit { font-size: 16px; font-weight: 400; color: #8B949E; }
+
+  /* ── PILL BADGES ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .badge-blue  { background: rgba(88,166,255,0.15); color: #58A6FF; }
+  .badge-teal  { background: rgba(57,211,83,0.15);  color: #39D353; }
+  .badge-orange{ background: rgba(240,136,62,0.15); color: #F0883E; }
+  .badge-red   { background: rgba(248,81,73,0.15);  color: #F85149; }
+
+  /* ── PRESENCE DOTS ── */
+  .presence-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+  }
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: background 0.4s;
+  }
+  .dot.on  { background: #39D353; box-shadow: 0 0 6px #39D353; }
+  .dot.off { background: #30363D; }
+  .dot-label { font-size: 12px; color: #C9D1D9; flex: 1; }
+  .dot-state { font-size: 10px; color: #8B949E; font-family: 'JetBrains Mono', monospace; }
+
+  /* ── SWITCHES ── */
+  .sw-row {
+    position: absolute;
+    left: 0; right: 0;
+    height: 62px;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    border-bottom: 1px solid #21262D;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .sw-row:hover { background: rgba(255,255,255,0.02); }
+  .sw-row:active { background: rgba(88,166,255,0.05); }
+  .sw-icon { font-size: 22px; margin-right: 12px; }
+  .sw-name { font-size: 15px; font-weight: 500; flex: 1; }
+  .sw-state { font-size: 11px; color: #8B949E; margin-right: 12px; font-family: 'JetBrains Mono', monospace; }
+  .toggle {
+    width: 48px; height: 26px;
+    background: #30363D;
+    border-radius: 13px;
+    position: relative;
+    transition: background 0.3s;
+    flex-shrink: 0;
+  }
+  .toggle.on { background: #39D353; }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 20px; height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+  .toggle.on::after { transform: translateX(22px); }
+
+  /* ── CLIMA CONTROLS ── */
+  .clima-big-temp {
+    font-size: 58px;
+    font-weight: 700;
+    letter-spacing: -3px;
+    line-height: 1;
+    color: #E6EDF3;
+  }
+  .round-btn {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: #21262D;
+    border: 1px solid #30363D;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .round-btn:hover { transform: scale(1.08); }
+  .round-btn:active { transform: scale(0.95); }
+  .round-btn.minus { color: #F85149; }
+  .round-btn.plus  { color: #39D353;  }
+
+  .mode-btn {
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1px solid #30363D;
+    background: #21262D;
+    color: #C9D1D9;
+    font-size: 12px;
+    font-family: 'Space Grotesk', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .mode-btn:hover { border-color: #58A6FF; }
+  .mode-btn.active-cool { background: rgba(79,195,247,0.15); border-color: #4FC3F7; color: #4FC3F7; }
+  .mode-btn.active-heat { background: rgba(240,136,62,0.15);  border-color: #F0883E; color: #F0883E; }
+  .mode-btn.active-fan  { background: rgba(57,211,83,0.15);   border-color: #39D353; color: #39D353; }
+  .mode-btn.active-off  { background: rgba(139,148,158,0.1);  border-color: #8B949E; color: #8B949E; }
+
+  .big-toggle-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Space Grotesk', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+  .big-toggle-btn.on  { background: rgba(79,195,247,0.2); color: #4FC3F7; border: 1px solid #4FC3F7; }
+  .big-toggle-btn.off { background: #21262D; color: #8B949E; border: 1px solid #30363D; }
+  .big-toggle-btn:hover { opacity: 0.85; transform: scale(0.99); }
+
+  /* ── NAVBAR ── */
+  .navbar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 50px;
+    background: #0D1117;
+    border-top: 1px solid #21262D;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    z-index: 10;
+  }
+  .nav-btn {
+    padding: 7px 18px;
+    border-radius: 20px;
+    border: 1px solid #30363D;
+    background: transparent;
+    color: #8B949E;
+    font-size: 12px;
+    font-family: 'Space Grotesk', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 500;
+  }
+  .nav-btn:hover { color: #C9D1D9; border-color: #8B949E; }
+  .nav-btn.active { background: #21262D; border-color: #58A6FF; color: #58A6FF; }
+  .nav-btn.active.clima { border-color: #4FC3F7; color: #4FC3F7; background: rgba(79,195,247,0.08); }
+  .nav-btn.active.luci  { border-color: #F0883E; color: #F0883E; background: rgba(240,136,62,0.08); }
+
+  /* ── MINI CHART ── */
+  .mini-chart { width: 100%; height: 40px; display: block; }
+
+  /* ── NOTIFICATION ── */
+  .notification {
+    position: absolute;
+    top: 54px; left: 10px; right: 10px;
+    background: #1C2128;
+    border: 1px solid #30363D;
+    border-left: 3px solid #F0883E;
+    border-radius: 10px;
+    padding: 10px 14px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transform: translateY(-80px);
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    pointer-events: none;
+  }
+  .notification.show {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: all;
+  }
+  .notification.info  { border-left-color: #58A6FF; }
+  .notification.ok    { border-left-color: #39D353; }
+  .notification.warn  { border-left-color: #F0883E; }
+  .notification.error { border-left-color: #F85149; }
+  .notif-icon { font-size: 20px; flex-shrink: 0; }
+  .notif-text { flex: 1; }
+  .notif-title { font-size: 12px; font-weight: 600; color: #E6EDF3; }
+  .notif-body  { font-size: 10px; color: #8B949E; margin-top: 1px; font-family: 'JetBrains Mono', monospace; }
+  .notif-close {
+    font-size: 14px; color: #8B949E; cursor: pointer;
+    padding: 2px 4px;
+  }
+  .notif-bar {
+    position: absolute;
+    bottom: 0; left: 0;
+    height: 2px;
+    background: #F0883E;
+    border-radius: 0 0 0 10px;
+    animation: notif-timer 4s linear forwards;
+  }
+  @keyframes notif-timer { from { width: 100%; } to { width: 0%; } }
+
+  /* ── SCREENSAVER ── */
+  .screensaver {
+    position: absolute;
+    inset: 0;
+    background: #060810;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.8s;
+    cursor: pointer;
+  }
+  .screensaver.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+  .ss-time {
+    font-size: 64px;
+    font-weight: 700;
+    letter-spacing: -3px;
+    color: rgba(255,255,255,0.9);
+    font-family: 'JetBrains Mono', monospace;
+    text-shadow: 0 0 30px rgba(88,166,255,0.4);
+    animation: ss-float 4s ease-in-out infinite;
+  }
+  .ss-date {
+    font-size: 14px;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .ss-ambient {
+    display: flex;
+    gap: 24px;
+    margin-top: 20px;
+  }
+  .ss-stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 16px;
+    color: rgba(255,255,255,0.5);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .ss-touch-hint {
+    position: absolute;
+    bottom: 20px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.15);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    animation: blink 2s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:0.15} 50%{opacity:0.4} }
+  @keyframes ss-float {
+    0%,100% { transform: translateY(0); }
+    50%      { transform: translateY(-6px); }
+  }
+
+  /* Stars screensaver bg */
+  .ss-stars {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+  .star {
+    position: absolute;
+    border-radius: 50%;
+    background: white;
+    animation: twinkle var(--d) ease-in-out infinite var(--delay);
+  }
+  @keyframes twinkle { 0%,100%{opacity:0.1} 50%{opacity:var(--max-op)} }
+
+  /* ── SVG ARC ── */
+  svg.arc-gauge { overflow: visible; }
+
+  /* ── BOTTOM CONTROLS ── */
+  .controls-bar {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .ctrl-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid #30363D;
+    background: #161B22;
+    color: #8B949E;
+    font-size: 12px;
+    font-family: 'Space Grotesk', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+  }
+  .ctrl-btn:hover { border-color: #58A6FF; color: #58A6FF; background: rgba(88,166,255,0.05); }
+  .ctrl-btn.warn:hover { border-color: #F0883E; color: #F0883E; background: rgba(240,136,62,0.05); }
+  .ctrl-btn.ok:hover   { border-color: #39D353; color: #39D353; background: rgba(57,211,83,0.05); }
+
+  .info-row {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+    font-size: 11px;
+    color: #8B949E;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .info-chip {
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: #161B22;
+    border: 1px solid #21262D;
+    color: #8B949E;
+  }
+
+  /* Scroll for lux card */
+  .lux-bar { height: 6px; border-radius: 3px; background: #21262D; margin: 6px 12px; overflow: hidden; }
+  .lux-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #F0883E, #FFD700); transition: width 0.5s; }
+
+</style>
+</head>
+<body>
+
+<div class="page-title">ESP32-S3 · ILI9488 480×320 · LVGL Dashboard Preview</div>
+
+<div class="device-frame">
+  <div class="device-label">ESP32-S3 DevKit · ILI9488 TFT 3.5"</div>
+  <div class="screen-bezel">
+    <div class="display" id="display">
+
+      <!-- ═══════════ SCREENSAVER ═══════════ -->
+      <div class="screensaver" id="screensaver" onclick="wakeDisplay()">
+        <div class="ss-stars" id="ssStars"></div>
+        <div class="ss-time" id="ssTime">22:47</div>
+        <div class="ss-date" id="ssDate">Domenica, 01 Marzo 2026</div>
+        <div class="ss-ambient">
+          <div class="ss-stat">🌡️ <span id="ssTempVal">22.4°</span></div>
+          <div class="ss-stat">💧 <span>58%</span></div>
+          <div class="ss-stat">🔆 <span>340 lx</span></div>
+        </div>
+        <div class="ss-touch-hint">tocca per riattivare</div>
+      </div>
+
+      <!-- ═══════════ NOTIFICATION ═══════════ -->
+      <div class="notification" id="notification">
+        <div class="notif-icon" id="notifIcon">⚠️</div>
+        <div class="notif-text">
+          <div class="notif-title" id="notifTitle">Titolo</div>
+          <div class="notif-body"  id="notifBody">Body</div>
+        </div>
+        <div class="notif-close" onclick="closeNotif()">✕</div>
+        <div class="notif-bar" id="notifBar"></div>
+      </div>
+
+      <!-- ═══════════ PAGE 1: AMBIENTE ═══════════ -->
+      <div class="page active" id="page0">
+        <div class="header">
+          <span class="header-title">🏠 <span>Dashboard Ambiente</span></span>
+          <span class="header-sub" id="hdrTime">22:47</span>
+        </div>
+
+        <!-- Gauge Temperatura -->
+        <div class="card" style="left:8px;top:54px;width:185px;height:182px;">
+          <div class="card-title">Temperatura</div>
+          <div class="gauge-wrap">
+            <svg class="arc-gauge" width="160" height="130" viewBox="0 0 160 130">
+              <!-- Track -->
+              <path d="M 20 110 A 60 60 0 1 1 140 110" fill="none" stroke="#21262D" stroke-width="10" stroke-linecap="round"/>
+              <!-- Fill -->
+              <path id="arcFill" d="M 20 110 A 60 60 0 1 1 140 110" fill="none" stroke="url(#arcGrad)" stroke-width="10" stroke-linecap="round"
+                    stroke-dasharray="220" stroke-dashoffset="55"/>
+              <defs>
+                <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%"   stop-color="#4FC3F7"/>
+                  <stop offset="100%" stop-color="#58A6FF"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <div class="gauge-value"><span id="tempVal">22.4</span><span class="gauge-unit">°C</span></div>
+          </div>
+        </div>
+
+        <!-- Umidità -->
+        <div class="card" style="left:200px;top:54px;width:130px;height:86px;">
+          <div class="card-title">Umidità</div>
+          <div style="padding:4px 12px 8px;font-size:30px;font-weight:700;color:#4FC3F7;letter-spacing:-1px;" id="humVal">58<span style="font-size:16px;color:#8B949E">%</span></div>
+          <div style="margin:0 12px;height:4px;background:#21262D;border-radius:2px;overflow:hidden;">
+            <div id="humBar" style="height:100%;width:58%;background:linear-gradient(90deg,#4FC3F7,#58A6FF);border-radius:2px;transition:width 0.5s;"></div>
+          </div>
+        </div>
+
+        <!-- Luce -->
+        <div class="card" style="left:338px;top:54px;width:134px;height:86px;">
+          <div class="card-title">Luminosità</div>
+          <div style="padding:4px 12px 8px;font-size:22px;font-weight:700;color:#F0883E;letter-spacing:-0.5px;" id="luxVal">340 <span style="font-size:11px;color:#8B949E">lx</span></div>
+          <div class="lux-bar"><div class="lux-fill" id="luxFill" style="width:34%;"></div></div>
+        </div>
+
+        <!-- Mini storico temp -->
+        <div class="card" style="left:200px;top:148px;width:272px;height:88px;">
+          <div class="card-title">Storico 12h</div>
+          <svg class="mini-chart" style="width:100%;height:52px;display:block;margin-top:2px;" viewBox="0 0 270 50" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#58A6FF" stop-opacity="0.3"/>
+                <stop offset="100%" stop-color="#58A6FF" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="M0,38 L22,35 L45,30 L67,28 L90,32 L112,26 L135,22 L157,20 L180,18 L202,15 L225,17 L247,14 L270,12" fill="none" stroke="#58A6FF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M0,38 L22,35 L45,30 L67,28 L90,32 L112,26 L135,22 L157,20 L180,18 L202,15 L225,17 L247,14 L270,12 L270,50 L0,50Z" fill="url(#chartGrad)"/>
+          </svg>
+        </div>
+
+        <!-- Presenze -->
+        <div class="card" style="left:8px;top:244px;width:460px;height:70px;border-radius:10px;">
+          <div style="display:flex;align-items:center;height:100%;padding:0 12px;gap:24px;">
+            <span style="font-size:11px;color:#8B949E;text-transform:uppercase;letter-spacing:0.1em;flex-shrink:0;">Presenze</span>
+            <div class="presence-row" style="padding:0;">
+              <div class="dot on" id="dot0"></div>
+              <span class="dot-label">Salotto</span>
+              <span class="dot-state" id="dotState0">in casa</span>
+            </div>
+            <div class="presence-row" style="padding:0;">
+              <div class="dot off" id="dot1"></div>
+              <span class="dot-label">Camera</span>
+              <span class="dot-state" id="dotState1">vuota</span>
+            </div>
+            <div class="presence-row" style="padding:0;">
+              <div class="dot off" id="dot2"></div>
+              <span class="dot-label">Bagno</span>
+              <span class="dot-state" id="dotState2">vuoto</span>
+            </div>
+            <div class="presence-row" style="padding:0;">
+              <div class="dot on" id="dot3"></div>
+              <span class="dot-label">Cucina</span>
+              <span class="dot-state" id="dotState3">occupata</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="navbar">
+          <button class="nav-btn active" onclick="showPage(0)">🌡️ Ambiente</button>
+          <button class="nav-btn clima"  onclick="showPage(1)">❄️ Clima</button>
+          <button class="nav-btn luci"   onclick="showPage(2)">💡 Luci</button>
+        </div>
+      </div>
+
+      <!-- ═══════════ PAGE 2: CLIMA ═══════════ -->
+      <div class="page right" id="page1">
+        <div class="header">
+          <span class="header-title">❄️ <span>Condizionatore</span></span>
+          <span class="badge badge-blue" id="climaBadge">cooling</span>
+        </div>
+
+        <!-- Main clima card -->
+        <div style="position:absolute;left:8px;top:54px;right:8px;height:204px;background:#161B22;border:1px solid #21262D;border-radius:14px;padding:14px;">
+          <div style="display:flex;align-items:flex-start;gap:0;">
+            <!-- Temp target -->
+            <div style="flex:1;">
+              <div style="font-size:11px;color:#8B949E;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Target</div>
+              <div class="clima-big-temp" id="climaTarget">22°<span style="font-size:22px;color:#8B949E;font-weight:400">C</span></div>
+              <div style="font-size:11px;color:#8B949E;margin-top:6px;">Attuale: <span style="color:#4FC3F7" id="tempAttuale">22.4°C</span></div>
+            </div>
+            <!-- +/- controls -->
+            <div style="display:flex;align-items:center;gap:12px;margin-top:10px;">
+              <div class="round-btn minus" onclick="adjustTemp(-1)">−</div>
+              <div class="round-btn plus"  onclick="adjustTemp(+1)">+</div>
+            </div>
+          </div>
+
+          <!-- Mode buttons -->
+          <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+            <button class="mode-btn active-cool" id="modeBtn-cool" onclick="setMode('cool')">❄️ Freddo</button>
+            <button class="mode-btn"             id="modeBtn-heat" onclick="setMode('heat')">🔥 Caldo</button>
+            <button class="mode-btn"             id="modeBtn-fan"  onclick="setMode('fan')">🌀 Ventil.</button>
+            <button class="mode-btn"             id="modeBtn-off"  onclick="setMode('off')">⏻ Spento</button>
+          </div>
+
+          <!-- Big toggle -->
+          <div style="margin-top:12px;">
+            <button class="big-toggle-btn on" id="climaToggleBtn" onclick="toggleClima()">⏻ &nbsp; ACCESO — premi per spegnere</button>
+          </div>
+        </div>
+
+        <!-- Fan speed -->
+        <div class="card" style="left:8px;top:266px;right:8px;width:462px;height:48px;border-radius:8px;display:flex;align-items:center;padding:0 14px;gap:10px;">
+          <span style="font-size:11px;color:#8B949E;flex-shrink:0;">Velocità:</span>
+          <div id="fanBars" style="display:flex;gap:3px;align-items:flex-end;height:24px;">
+            <div style="width:8px;height:8px;border-radius:2px;background:#4FC3F7;"></div>
+            <div style="width:8px;height:14px;border-radius:2px;background:#4FC3F7;"></div>
+            <div style="width:8px;height:20px;border-radius:2px;background:#4FC3F7;"></div>
+            <div style="width:8px;height:14px;border-radius:2px;background:#30363D;"></div>
+            <div style="width:8px;height:8px;border-radius:2px;background:#30363D;"></div>
+          </div>
+          <span style="font-size:12px;color:#4FC3F7;font-family:'JetBrains Mono',monospace;">Media</span>
+        </div>
+
+        <div class="navbar">
+          <button class="nav-btn"        onclick="showPage(0)">🌡️ Ambiente</button>
+          <button class="nav-btn active clima" onclick="showPage(1)">❄️ Clima</button>
+          <button class="nav-btn luci"   onclick="showPage(2)">💡 Luci</button>
+        </div>
+      </div>
+
+      <!-- ═══════════ PAGE 3: LUCI ═══════════ -->
+      <div class="page right" id="page2">
+        <div class="header">
+          <span class="header-title">💡 <span>Luci & Ambienti</span></span>
+          <span class="badge badge-orange" id="luciOnCount">3 accese</span>
+        </div>
+
+        <!-- Switch list -->
+        <div style="position:absolute;top:46px;left:0;right:0;bottom:50px;overflow:hidden;">
+
+          <div class="sw-row" style="top:0;" onclick="toggleLight(0)">
+            <span class="sw-icon">💡</span>
+            <span class="sw-name">Salotto</span>
+            <span class="sw-state" id="swState0">accesa</span>
+            <div class="toggle on" id="sw0"></div>
+          </div>
+
+          <div class="sw-row" style="top:62px;" onclick="toggleLight(1)">
+            <span class="sw-icon">🛏️</span>
+            <span class="sw-name">Camera da letto</span>
+            <span class="sw-state" id="swState1">spenta</span>
+            <div class="toggle" id="sw1"></div>
+          </div>
+
+          <div class="sw-row" style="top:124px;" onclick="toggleLight(2)">
+            <span class="sw-icon">🍳</span>
+            <span class="sw-name">Cucina</span>
+            <span class="sw-state" id="swState2">accesa</span>
+            <div class="toggle on" id="sw2"></div>
+          </div>
+
+          <div class="sw-row" style="top:186px;" onclick="toggleLight(3)">
+            <span class="sw-icon">🚿</span>
+            <span class="sw-name">Bagno</span>
+            <span class="sw-state" id="swState3">spenta</span>
+            <div class="toggle" id="sw3"></div>
+          </div>
+
+          <!-- Brightness slider salotto -->
+          <div style="position:absolute;top:248px;left:0;right:0;height:22px;background:#0D1117;display:flex;align-items:center;padding:0 16px;gap:10px;border-top:1px solid #21262D;">
+            <span style="font-size:10px;color:#8B949E;width:70px;">💡 Salotto</span>
+            <input type="range" id="brightnessSlider" min="0" max="100" value="70" style="flex:1;accent-color:#F0883E;" oninput="updateBrightness(this.value)">
+            <span style="font-size:10px;color:#F0883E;font-family:'JetBrains Mono',monospace;width:36px;" id="brightnessVal">70%</span>
+          </div>
+        </div>
+
+        <div class="navbar">
+          <button class="nav-btn"        onclick="showPage(0)">🌡️ Ambiente</button>
+          <button class="nav-btn clima"  onclick="showPage(1)">❄️ Clima</button>
+          <button class="nav-btn active luci" onclick="showPage(2)">💡 Luci</button>
+        </div>
+      </div>
+
+    </div><!-- /display -->
+  </div><!-- /bezel -->
+</div><!-- /frame -->
+
+<!-- Controls -->
+<div class="controls-bar">
+  <button class="ctrl-btn" onclick="triggerScreensaver()">🌙 Screensaver</button>
+  <button class="ctrl-btn warn" onclick="showNotif('warn','⚠️','Finestra aperta!','Salotto · da 23 min')">⚠️ Notifica warn</button>
+  <button class="ctrl-btn"     onclick="showNotif('info','❄️','Clima raggiunto','Target 22°C raggiunto')">❄️ Notifica info</button>
+  <button class="ctrl-btn ok"  onclick="showNotif('ok','✅','Tutti a casa','Presenza rilevata in salotto')">✅ Notifica ok</button>
+  <button class="ctrl-btn"     onclick="randomizeData()">🎲 Aggiorna dati</button>
+</div>
+<div class="info-row">
+  <span class="info-chip">⚡ LVGL engine</span>
+  <span class="info-chip">📡 API HA connected</span>
+  <span class="info-chip">🔄 update: 2s</span>
+  <span class="info-chip" id="autoSsChip">💤 screensaver: 60s</span>
+</div>
+
+<script>
+  // ── STATE ──
+  let currentPage = 0;
+  let climaOn = true;
+  let climaMode = 'cool';
+  let climaTemp = 22;
+  let lightsState = [true, false, true, false];
+  let ssTimeout;
+  let ssActive = false;
+  let notifTimeout;
+
+  const pages = [
+    document.getElementById('page0'),
+    document.getElementById('page1'),
+    document.getElementById('page2'),
+  ];
+
+  // ── CLOCK ──
+  function updateClock() {
+    const now = new Date();
+    const t = now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+    const d = now.toLocaleDateString('it-IT',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+    document.getElementById('hdrTime').textContent = t;
+    document.getElementById('ssTime').textContent = t;
+    document.getElementById('ssDate').textContent = d.charAt(0).toUpperCase() + d.slice(1);
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // ── NAVIGATION ──
+  function showPage(idx) {
+    pages.forEach((p,i) => {
+      p.className = 'page ' + (i < idx ? 'left' : i > idx ? 'right' : 'active');
+    });
+    currentPage = idx;
+    resetSsTimer();
+  }
+
+  // ── SCREENSAVER ──
+  function buildStars() {
+    const c = document.getElementById('ssStars');
+    for(let i=0;i<60;i++) {
+      const s = document.createElement('div');
+      s.className = 'star';
+      const size = Math.random()*2+0.5;
+      s.style.cssText = `
+        width:${size}px;height:${size}px;
+        top:${Math.random()*100}%;left:${Math.random()*100}%;
+        --d:${(Math.random()*3+2).toFixed(1)}s;
+        --delay:-${(Math.random()*4).toFixed(1)}s;
+        --max-op:${(Math.random()*0.6+0.2).toFixed(2)};
+      `;
+      c.appendChild(s);
+    }
+  }
+  buildStars();
+
+  function resetSsTimer() {
+    clearTimeout(ssTimeout);
+    if(ssActive) { wakeDisplay(); return; }
+    ssTimeout = setTimeout(triggerScreensaver, 30000);
+  }
+
+  function triggerScreensaver() {
+    ssActive = true;
+    document.getElementById('screensaver').classList.add('active');
+  }
+
+  function wakeDisplay() {
+    ssActive = false;
+    document.getElementById('screensaver').classList.remove('active');
+    resetSsTimer();
+  }
+
+  document.getElementById('display').addEventListener('click', () => {
+    if(!ssActive) resetSsTimer();
+  });
+
+  resetSsTimer();
+
+  // ── NOTIFICATIONS ──
+  function showNotif(type, icon, title, body) {
+    const n = document.getElementById('notification');
+    document.getElementById('notifIcon').textContent = icon;
+    document.getElementById('notifTitle').textContent = title;
+    document.getElementById('notifBody').textContent = body;
+    n.className = 'notification ' + type + ' show';
+    const bar = document.getElementById('notifBar');
+    const colors = {warn:'#F0883E', info:'#58A6FF', ok:'#39D353', error:'#F85149'};
+    bar.style.background = colors[type] || '#58A6FF';
+    n.style.borderLeftColor = colors[type] || '#58A6FF';
+    bar.style.animation = 'none';
+    void bar.offsetWidth;
+    bar.style.animation = 'notif-timer 4s linear forwards';
+    clearTimeout(notifTimeout);
+    notifTimeout = setTimeout(() => closeNotif(), 4200);
+    resetSsTimer();
+  }
+
+  function closeNotif() {
+    document.getElementById('notification').classList.remove('show');
+  }
+
+  // ── CLIMA ──
+  function adjustTemp(delta) {
+    climaTemp = Math.max(16, Math.min(30, climaTemp + delta));
+    document.getElementById('climaTarget').innerHTML = climaTemp + '°<span style="font-size:22px;color:#8B949E;font-weight:400">C</span>';
+    resetSsTimer();
+  }
+
+  function setMode(mode) {
+    climaMode = mode;
+    ['cool','heat','fan','off'].forEach(m => {
+      document.getElementById('modeBtn-'+m).className = 'mode-btn' + (m===mode ? ' active-'+m : '');
+    });
+    const labels = {cool:'cooling',heat:'heating',fan:'fan only',off:'spento'};
+    document.getElementById('climaBadge').textContent = labels[mode];
+    resetSsTimer();
+  }
+
+  function toggleClima() {
+    climaOn = !climaOn;
+    const btn = document.getElementById('climaToggleBtn');
+    if(climaOn) {
+      btn.className = 'big-toggle-btn on';
+      btn.textContent = '⏻   ACCESO — premi per spegnere';
+    } else {
+      btn.className = 'big-toggle-btn off';
+      btn.textContent = '⏻   SPENTO — premi per accendere';
+      setMode('off');
+    }
+    resetSsTimer();
+  }
+
+  // ── LIGHTS ──
+  function toggleLight(idx) {
+    lightsState[idx] = !lightsState[idx];
+    const on = lightsState[idx];
+    document.getElementById('sw'+idx).className = 'toggle' + (on ? ' on' : '');
+    const states = ['accesa','accesa','accesa','accesa'];
+    const offS   = ['spenta','spenta','spenta','spenta'];
+    document.getElementById('swState'+idx).textContent = on ? states[idx] : offS[idx];
+    const count = lightsState.filter(Boolean).length;
+    document.getElementById('luciOnCount').textContent = count + (count===1?' accesa':' accese');
+    resetSsTimer();
+  }
+
+  function updateBrightness(val) {
+    document.getElementById('brightnessVal').textContent = val + '%';
+    resetSsTimer();
+  }
+
+  // ── RANDOMIZE DATA ──
+  function randomizeData() {
+    const temp = (18 + Math.random()*10).toFixed(1);
+    const hum  = Math.round(40 + Math.random()*45);
+    const lux  = Math.round(100 + Math.random()*900);
+
+    document.getElementById('tempVal').textContent = temp;
+    document.getElementById('ssTempVal').textContent = temp + '°';
+    document.getElementById('tempAttuale').textContent = temp + '°C';
+    document.getElementById('humVal').innerHTML = hum + '<span style="font-size:16px;color:#8B949E">%</span>';
+    document.getElementById('humBar').style.width = hum + '%';
+    document.getElementById('luxVal').innerHTML = lux + ' <span style="font-size:11px;color:#8B949E">lx</span>';
+    document.getElementById('luxFill').style.width = Math.min(100, lux/10) + '%';
+
+    // Update arc
+    const pct = (parseFloat(temp) - 10) / 30; // 10..40 range
+    const dashOffset = 220 - pct * 175;
+    document.getElementById('arcFill').setAttribute('stroke-dashoffset', dashOffset);
+
+    // Random presences
+    const rooms = ['salotto','camera','bagno','cucina'];
+    const onTexts  = ['in casa','in camera','presente','occupata'];
+    const offTexts = ['vuoto','vuota','vuoto','vuota'];
+    rooms.forEach((_,i) => {
+      const on = Math.random() > 0.4;
+      const dot = document.getElementById('dot'+i);
+      dot.className = 'dot ' + (on ? 'on' : 'off');
+      document.getElementById('dotState'+i).textContent = on ? onTexts[i] : offTexts[i];
+    });
+
+    showNotif('info','📊','Dati aggiornati', `Temp ${temp}°C · Hum ${hum}% · ${lux} lx`);
+    resetSsTimer();
+  }
+
+</script>
+</body>
+</html>

@@ -1,0 +1,643 @@
+# ============================================================
+#  WOW Dashboard — ILI9488 3.5" + ESP32-S3 + LVGL
+#  3 pagine touch, screensaver, auto-dimmer, notifiche
+# ============================================================
+
+esphome:
+  name: wow-dashboard
+  friendly_name: WOW Dashboard
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+  flash_size: 16MB
+  psram:
+    mode: octal
+    speed: 80MHz
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Dashboard Fallback"
+    password: "12345678"
+
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  password: !secret ota_password
+
+logger:
+  level: INFO
+
+# ── BACKLIGHT PWM ──────────────────────────────────────────
+output:
+  - platform: ledc
+    pin: GPIO46
+    id: backlight_pwm
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    id: backlight
+    restore_mode: ALWAYS_ON
+    default_transition_length: 1s
+
+# ── SPI ────────────────────────────────────────────────────
+spi:
+  - id: spi_bus
+    clk_pin: GPIO12
+    mosi_pin: GPIO11
+    miso_pin: GPIO13
+    data_rate: 80MHz
+
+# ── DISPLAY ────────────────────────────────────────────────
+display:
+  - platform: ili9xxx
+    model: ILI9488
+    spi_id: spi_bus
+    cs_pin: GPIO10
+    dc_pin: GPIO47
+    reset_pin: GPIO48
+    rotation: LANDSCAPE
+    color_order: BGR
+    id: my_display
+    update_interval: never
+
+# ── TOUCH XPT2046 ──────────────────────────────────────────
+touchscreen:
+  - platform: xpt2046
+    spi_id: spi_bus
+    cs_pin: GPIO5
+    interrupt_pin: GPIO4
+    id: my_touch
+    calibration:
+      x_min: 340
+      x_max: 3860
+      y_min: 250
+      y_max: 3800
+    transform:
+      mirror_x: false
+      mirror_y: false
+      swap_xy: true
+    on_touch:
+      - lambda: |-
+          id(screensaver_timer) = 0;
+          if (id(screensaver_active)) {
+            id(screensaver_active) = false;
+            lv_scr_load(id(page_ambiente));
+          }
+
+# ── FONT ───────────────────────────────────────────────────
+font:
+  - file: "gfonts://Roboto"
+    id: roboto_12
+    size: 12
+    bpp: 4
+  - file: "gfonts://Roboto"
+    id: roboto_16
+    size: 16
+    bpp: 4
+  - file: "gfonts://Roboto"
+    id: roboto_24
+    size: 24
+    bpp: 4
+  - file: "gfonts://Roboto"
+    id: roboto_48
+    size: 48
+    bpp: 4
+  - file: "https://github.com/Pictogrammers/MaterialDesignIcons/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: mdi_36
+    size: 36
+    bpp: 4
+    glyphs:
+      - "\U000F0594"  # thermometer
+      - "\U000F058E"  # water-percent
+      - "\U000F0335"  # lightbulb
+      - "\U000F0A70"  # air-conditioner
+      - "\U000F059D"  # white-balance-sunny
+      - "\U000F0208"  # eye
+      - "\U000F004B"  # fan
+
+# ── COLORI ─────────────────────────────────────────────────
+color:
+  - id: c_bg          ; hex: "0D1117"
+  - id: c_card        ; hex: "161B22"
+  - id: c_border      ; hex: "30363D"
+  - id: c_accent_blue ; hex: "58A6FF"
+  - id: c_accent_teal ; hex: "39D353"
+  - id: c_orange      ; hex: "F0883E"
+  - id: c_text        ; hex: "E6EDF3"
+  - id: c_muted       ; hex: "8B949E"
+  - id: c_danger      ; hex: "F85149"
+  - id: c_success     ; hex: "3FB950"
+
+# ── VARIABILI GLOBALI ──────────────────────────────────────
+globals:
+  - id: screensaver_timer
+    type: int
+    restore_value: no
+    initial_value: "0"
+  - id: screensaver_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: clima_target
+    type: float
+    restore_value: yes
+    initial_value: "22.0"
+
+# ── TIMER SCREENSAVER ──────────────────────────────────────
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          if (!id(screensaver_active)) {
+            id(screensaver_timer)++;
+            if (id(screensaver_timer) >= 120) {
+              id(screensaver_active) = true;
+              lv_scr_load_anim(id(page_screensaver),
+                LV_SCR_LOAD_ANIM_FADE_IN, 800, 0, false);
+            }
+          }
+
+# ── SENSORI HOME ASSISTANT ─────────────────────────────────
+sensor:
+  - platform: homeassistant
+    id: s_temp
+    entity_id: sensor.temperatura_salotto   # <-- personalizza
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: lbl_temp_value
+          text: !lambda 'return str_sprintf("%.1f°", x);'
+      - lvgl.arc.update:
+          id: arc_temp
+          value: !lambda 'return (int)x;'
+      - lambda: |-
+          float b = (x - 15.0f) / 20.0f;
+          b = b < 0.2f ? 0.2f : (b > 1.0f ? 1.0f : b);
+          auto call = id(backlight).turn_on();
+          call.set_brightness(b);
+          call.perform();
+
+  - platform: homeassistant
+    id: s_hum
+    entity_id: sensor.umidita_salotto       # <-- personalizza
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: lbl_hum_value
+          text: !lambda 'return str_sprintf("%.0f%%", x);'
+
+  - platform: homeassistant
+    id: s_lux
+    entity_id: sensor.luce_lux             # <-- personalizza
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: lbl_lux_value
+          text: !lambda 'return str_sprintf("%.0f lx", x);'
+
+  - platform: homeassistant
+    id: s_clima_target
+    entity_id: climate.condizionatore      # <-- personalizza
+    attribute: temperature
+    internal: true
+    on_value:
+      - lambda: 'id(clima_target) = x;'
+      - lvgl.label.update:
+          id: lbl_clima_target
+          text: !lambda 'return str_sprintf("%.0f°C", x);'
+
+binary_sensor:
+  - platform: homeassistant
+    id: bs_presenza_salotto
+    entity_id: binary_sensor.presenza_salotto  # <-- personalizza
+    internal: true
+    on_state:
+      - lvgl.widget.update:
+          id: dot_salotto
+          bg_color: !lambda 'return x ? id(c_success) : id(c_border);'
+
+  - platform: homeassistant
+    id: bs_presenza_camera
+    entity_id: binary_sensor.presenza_camera   # <-- personalizza
+    internal: true
+    on_state:
+      - lvgl.widget.update:
+          id: dot_camera
+          bg_color: !lambda 'return x ? id(c_success) : id(c_border);'
+
+  - platform: homeassistant
+    id: bs_luce_salotto
+    entity_id: light.luce_salotto              # <-- personalizza
+    internal: true
+    on_state:
+      - lvgl.switch.update:
+          id: sw_luce_salotto
+          state: !lambda 'return x;'
+
+  - platform: homeassistant
+    id: bs_luce_camera
+    entity_id: light.luce_camera               # <-- personalizza
+    internal: true
+    on_state:
+      - lvgl.switch.update:
+          id: sw_luce_camera
+          state: !lambda 'return x;'
+
+  - platform: homeassistant
+    id: bs_luce_cucina
+    entity_id: light.luce_cucina               # <-- personalizza
+    internal: true
+    on_state:
+      - lvgl.switch.update:
+          id: sw_luce_cucina
+          state: !lambda 'return x;'
+
+text_sensor:
+  - platform: homeassistant
+    id: ts_clima_stato
+    entity_id: climate.condizionatore          # <-- personalizza
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: lbl_clima_stato
+          text: !lambda 'return x;'
+
+# ── LVGL ──────────────────────────────────────────────────
+lvgl:
+  display_id: my_display
+  touchscreen_id: my_touch
+  color_depth: 16
+  bg_color: 0x0D1117
+  text_font: roboto_16
+
+  theme:
+    btn:
+      bg_color: 0x30363D
+      bg_grad_color: 0x21262D
+      text_color: 0xE6EDF3
+      border_color: 0x30363D
+      border_width: 1
+      radius: 12
+      pressed:
+        bg_color: 0x58A6FF
+        text_color: 0xFFFFFF
+    switch:
+      bg_color: 0x30363D
+      checked:
+        bg_color: 0x39D353
+    arc:
+      arc_color: 0x30363D
+      indicator:
+        arc_color: 0x58A6FF
+
+  pages:
+
+    # ── SCREENSAVER ──────────────────────────────────────
+    - id: page_screensaver
+      bg_color: 0x000000
+      widgets:
+        - label:
+            id: lbl_ss_temp
+            x: 140; y: 130
+            text: "--°C"
+            text_font: roboto_48
+            text_color: 0x333333
+        - label:
+            x: 80; y: 290
+            text: "tocca per riattivare"
+            text_font: roboto_12
+            text_color: 0x222222
+
+    # ── PAGINA 1: AMBIENTE ───────────────────────────────
+    - id: page_ambiente
+      bg_color: 0x0D1117
+      widgets:
+        - obj:
+            x: 0; y: 0; width: 480; height: 48
+            bg_color: 0x161B22; border_width: 0; radius: 0
+            widgets:
+              - label:
+                  x: 14; y: 12
+                  text: "Dashboard Ambiente"
+                  text_font: roboto_24; text_color: 0xE6EDF3
+
+        # Gauge temperatura
+        - obj:
+            x: 8; y: 54; width: 185; height: 182
+            bg_color: 0x161B22
+            border_color: 0x21262D; border_width: 1; radius: 14
+            widgets:
+              - label:
+                  x: 12; y: 8; text: "Temperatura"
+                  text_font: roboto_12; text_color: 0x8B949E
+              - arc:
+                  id: arc_temp
+                  x: 18; y: 24; width: 148; height: 148
+                  min_value: 0; max_value: 40; value: 22
+                  start_angle: 135; end_angle: 45; arc_width: 10
+                  indicator:
+                    arc_color: 0x58A6FF; arc_width: 10
+              - label:
+                  id: lbl_temp_value
+                  x: 92; y: 92; text: "22.0°"
+                  text_font: roboto_48; text_color: 0xE6EDF3
+                  align: CENTER
+
+        # Umidità
+        - obj:
+            x: 200; y: 54; width: 130; height: 88
+            bg_color: 0x161B22
+            border_color: 0x21262D; border_width: 1; radius: 14
+            widgets:
+              - label:
+                  x: 10; y: 8; text: "Umidità"
+                  text_font: roboto_12; text_color: 0x8B949E
+              - label:
+                  id: lbl_hum_value
+                  x: 10; y: 30; text: "58%"
+                  text_font: roboto_48; text_color: 0x4FC3F7
+
+        # Luminosità
+        - obj:
+            x: 338; y: 54; width: 134; height: 88
+            bg_color: 0x161B22
+            border_color: 0x21262D; border_width: 1; radius: 14
+            widgets:
+              - label:
+                  x: 10; y: 8; text: "Luminosità"
+                  text_font: roboto_12; text_color: 0x8B949E
+              - label:
+                  id: lbl_lux_value
+                  x: 10; y: 34; text: "340 lx"
+                  text_font: roboto_24; text_color: 0xF0883E
+
+        # Presenze
+        - obj:
+            x: 200; y: 150; width: 272; height: 88
+            bg_color: 0x161B22
+            border_color: 0x21262D; border_width: 1; radius: 14
+            widgets:
+              - label:
+                  x: 12; y: 8; text: "Presenze"
+                  text_font: roboto_12; text_color: 0x8B949E
+              - obj:
+                  id: dot_salotto
+                  x: 12; y: 36; width: 14; height: 14
+                  radius: 7; bg_color: 0x3FB950; border_width: 0
+              - label:
+                  x: 32; y: 31; text: "Salotto"; text_color: 0xE6EDF3
+              - obj:
+                  id: dot_camera
+                  x: 140; y: 36; width: 14; height: 14
+                  radius: 7; bg_color: 0x30363D; border_width: 0
+              - label:
+                  x: 160; y: 31; text: "Camera"; text_color: 0xE6EDF3
+
+        # Navbar
+        - obj:
+            x: 0; y: 270; width: 480; height: 50
+            bg_color: 0x0D1117; border_width: 0; radius: 0
+            widgets:
+              - btn:
+                  x: 20; y: 8; width: 130; height: 34
+                  bg_color: 0x58A6FF
+                  widgets:
+                    - label:
+                        text: "Ambiente"; text_color: 0xFFFFFF
+              - btn:
+                  x: 175; y: 8; width: 130; height: 34
+                  widgets:
+                    - label:
+                        text: "Clima"
+                  on_press:
+                    - lvgl.page.show:
+                        id: page_clima; animation: MOVE_LEFT
+              - btn:
+                  x: 330; y: 8; width: 130; height: 34
+                  widgets:
+                    - label:
+                        text: "Luci"
+                  on_press:
+                    - lvgl.page.show:
+                        id: page_luci; animation: MOVE_LEFT
+
+    # ── PAGINA 2: CLIMA ──────────────────────────────────
+    - id: page_clima
+      bg_color: 0x0D1117
+      widgets:
+        - obj:
+            x: 0; y: 0; width: 480; height: 48
+            bg_color: 0x161B22; border_width: 0; radius: 0
+            widgets:
+              - label:
+                  x: 14; y: 12; text: "Condizionatore"
+                  text_font: roboto_24; text_color: 0x4FC3F7
+
+        - obj:
+            x: 8; y: 54; width: 462; height: 206
+            bg_color: 0x161B22
+            border_color: 0x21262D; border_width: 1; radius: 16
+            widgets:
+              - label:
+                  x: 20; y: 12; text: "Stato:"; text_color: 0x8B949E
+              - label:
+                  id: lbl_clima_stato
+                  x: 80; y: 10; text: "cooling"
+                  text_font: roboto_24; text_color: 0x58A6FF
+              - label:
+                  x: 20; y: 48; text: "Target:"; text_color: 0x8B949E
+              - label:
+                  id: lbl_clima_target
+                  x: 90; y: 38; text: "22°C"
+                  text_font: roboto_48; text_color: 0xE6EDF3
+              - btn:
+                  x: 290; y: 42; width: 60; height: 60; radius: 30
+                  bg_color: 0x21262D
+                  widgets:
+                    - label:
+                        text: "–"; text_font: roboto_48; text_color: 0xF85149
+                  on_press:
+                    - homeassistant.service:
+                        service: climate.set_temperature
+                        data:
+                          entity_id: climate.condizionatore
+                          temperature: !lambda 'return id(clima_target) - 1;'
+              - btn:
+                  x: 370; y: 42; width: 60; height: 60; radius: 30
+                  bg_color: 0x21262D
+                  widgets:
+                    - label:
+                        text: "+"; text_font: roboto_48; text_color: 0x39D353
+                  on_press:
+                    - homeassistant.service:
+                        service: climate.set_temperature
+                        data:
+                          entity_id: climate.condizionatore
+                          temperature: !lambda 'return id(clima_target) + 1;'
+              - btn:
+                  x: 20; y: 120; width: 90; height: 38; radius: 19
+                  widgets:
+                    - label:
+                        text: "❄️ Freddo"
+                  on_press:
+                    - homeassistant.service:
+                        service: climate.set_hvac_mode
+                        data:
+                          entity_id: climate.condizionatore
+                          hvac_mode: "cool"
+              - btn:
+                  x: 120; y: 120; width: 90; height: 38; radius: 19
+                  widgets:
+                    - label:
+                        text: "🔥 Caldo"
+                  on_press:
+                    - homeassistant.service:
+                        service: climate.set_hvac_mode
+                        data:
+                          entity_id: climate.condizionatore
+                          hvac_mode: "heat"
+              - btn:
+                  x: 220; y: 120; width: 90; height: 38; radius: 19
+                  widgets:
+                    - label:
+                        text: "🌀 Ventil."
+                  on_press:
+                    - homeassistant.service:
+                        service: climate.set_hvac_mode
+                        data:
+                          entity_id: climate.condizionatore
+                          hvac_mode: "fan_only"
+              - btn:
+                  id: btn_clima_toggle
+                  x: 20; y: 158; width: 200; height: 40; radius: 20
+                  bg_color: 0x4FC3F7
+                  widgets:
+                    - label:
+                        text: "⏻ ON / OFF"
+                        text_color: 0xFFFFFF; text_font: roboto_16
+                  on_press:
+                    - homeassistant.service:
+                        service: climate.toggle
+                        data:
+                          entity_id: climate.condizionatore
+
+        - obj:
+            x: 0; y: 270; width: 480; height: 50
+            bg_color: 0x0D1117; border_width: 0; radius: 0
+            widgets:
+              - btn:
+                  x: 20; y: 8; width: 130; height: 34
+                  widgets:
+                    - label:
+                        text: "Ambiente"
+                  on_press:
+                    - lvgl.page.show:
+                        id: page_ambiente; animation: MOVE_RIGHT
+              - btn:
+                  x: 175; y: 8; width: 130; height: 34
+                  bg_color: 0x4FC3F7
+                  widgets:
+                    - label:
+                        text: "Clima"; text_color: 0xFFFFFF
+              - btn:
+                  x: 330; y: 8; width: 130; height: 34
+                  widgets:
+                    - label:
+                        text: "Luci"
+                  on_press:
+                    - lvgl.page.show:
+                        id: page_luci; animation: MOVE_LEFT
+
+    # ── PAGINA 3: LUCI ───────────────────────────────────
+    - id: page_luci
+      bg_color: 0x0D1117
+      widgets:
+        - obj:
+            x: 0; y: 0; width: 480; height: 48
+            bg_color: 0x161B22; border_width: 0; radius: 0
+            widgets:
+              - label:
+                  x: 14; y: 12; text: "Luci & Ambienti"
+                  text_font: roboto_24; text_color: 0xF0883E
+
+        - obj:
+            x: 0; y: 48; width: 480; height: 62
+            bg_color: 0x161B22; border_width: 0
+            widgets:
+              - label:
+                  x: 16; y: 19; text: "Salotto"
+                  text_font: roboto_24; text_color: 0xE6EDF3
+              - switch:
+                  id: sw_luce_salotto
+                  x: 400; y: 18; width: 60; height: 28
+                  on_change:
+                    - homeassistant.service:
+                        service: light.toggle
+                        data:
+                          entity_id: light.luce_salotto
+
+        - obj:
+            x: 0; y: 111; width: 480; height: 62
+            bg_color: 0x161B22; border_width: 0
+            widgets:
+              - label:
+                  x: 16; y: 19; text: "Camera"
+                  text_font: roboto_24; text_color: 0xE6EDF3
+              - switch:
+                  id: sw_luce_camera
+                  x: 400; y: 18; width: 60; height: 28
+                  on_change:
+                    - homeassistant.service:
+                        service: light.toggle
+                        data:
+                          entity_id: light.luce_camera
+
+        - obj:
+            x: 0; y: 174; width: 480; height: 62
+            bg_color: 0x161B22; border_width: 0
+            widgets:
+              - label:
+                  x: 16; y: 19; text: "Cucina"
+                  text_font: roboto_24; text_color: 0xE6EDF3
+              - switch:
+                  id: sw_luce_cucina
+                  x: 400; y: 18; width: 60; height: 28
+                  on_change:
+                    - homeassistant.service:
+                        service: light.toggle
+                        data:
+                          entity_id: light.luce_cucina
+
+        - obj:
+            x: 0; y: 270; width: 480; height: 50
+            bg_color: 0x0D1117; border_width: 0; radius: 0
+            widgets:
+              - btn:
+                  x: 20; y: 8; width: 130; height: 34
+                  widgets:
+                    - label:
+                        text: "Ambiente"
+                  on_press:
+                    - lvgl.page.show:
+                        id: page_ambiente; animation: MOVE_RIGHT
+              - btn:
+                  x: 175; y: 8; width: 130; height: 34
+                  widgets:
+                    - label:
+                        text: "Clima"
+                  on_press:
+                    - lvgl.page.show:
+                        id: page_clima; animation: MOVE_RIGHT
+              - btn:
+                  x: 330; y: 8; width: 130; height: 34
+                  bg_color: 0xF0883E
+                  widgets:
+                    - label:
+                        text: "Luci"; text_color: 0xFFFFFF

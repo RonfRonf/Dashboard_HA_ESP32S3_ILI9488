@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>3D Enclosure Preview — ILI9488 + ESP32-S3</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: #0D1117;
+  color: #E6EDF3;
+  font-family: 'Space Grotesk', sans-serif;
+  min-height: 100vh;
+  padding: 24px;
+}
+h1 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #8B949E;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 20px;
+  text-align: center;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 16px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+.card {
+  background: #161B22;
+  border: 1px solid #21262D;
+  border-radius: 12px;
+  padding: 16px;
+}
+.card-title {
+  font-size: 11px;
+  color: #58A6FF;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.card-title::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #58A6FF;
+}
+svg text { font-family: 'JetBrains Mono', monospace; }
+
+.specs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.spec {
+  background: #0D1117;
+  border: 1px solid #21262D;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.spec-label { font-size: 10px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.1em; }
+.spec-val   { font-size: 16px; font-weight: 600; color: #E6EDF3; margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+.spec-sub   { font-size: 10px; color: #8B949E; }
+
+.print-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.print-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #0D1117;
+  border: 1px solid #21262D;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.print-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.print-name { flex: 1; font-weight: 500; }
+.print-detail { font-size: 10px; color: #8B949E; font-family: 'JetBrains Mono', monospace; }
+
+/* Isometric-style box illusion */
+.iso-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px;
+  grid-column: span 2;
+}
+
+.dim-line { stroke: #58A6FF; stroke-width: 0.5; stroke-dasharray: 3 2; }
+.dim-text { fill: #58A6FF; font-size: 8px; }
+.dim-arrow { fill: #58A6FF; }
+
+</style>
+</head>
+<body>
+<h1>⬡ Dashboard Enclosure — ILI9488 3.5" + ESP32-S3 DevKitC-1</h1>
+
+<div class="layout">
+
+  <!-- VISTA FRONTALE -->
+  <div class="card">
+    <div class="card-title">Vista Frontale (cornice)</div>
+    <svg viewBox="0 0 300 210" width="100%" style="display:block;">
+      <defs>
+        <pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="4" stroke="#21262D" stroke-width="1"/>
+        </pattern>
+      </defs>
+
+      <!-- Sfondo griglia -->
+      <rect width="300" height="210" fill="#0D1117"/>
+      <line x1="0" y1="105" x2="300" y2="105" stroke="#1a2030" stroke-width="0.5"/>
+      <line x1="150" y1="0" x2="150" y2="210" stroke="#1a2030" stroke-width="0.5"/>
+
+      <!-- Cornice esterna -->
+      <rect x="30" y="25" width="240" height="150" rx="5" fill="#21262D" stroke="#30363D" stroke-width="1.5"/>
+
+      <!-- Sede PCB display (recesso) -->
+      <rect x="41" y="36" width="218" height="128" rx="2" fill="url(#hatch)" stroke="#8B949E" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- Foro display area visibile -->
+      <rect x="63" y="46" width="174" height="116" rx="2" fill="#0D1117" stroke="#4FC3F7" stroke-width="1.5"/>
+      <!-- Schermo (simulazione) -->
+      <rect x="65" y="48" width="170" height="112" rx="1" fill="#161B22"/>
+      <text x="150" y="100" text-anchor="middle" fill="#58A6FF" font-size="9" font-family="JetBrains Mono">DISPLAY AREA</text>
+      <text x="150" y="112" text-anchor="middle" fill="#8B949E" font-size="7" font-family="JetBrains Mono">76 × 57 mm</text>
+
+      <!-- 4 fori viti angoli -->
+      <circle cx="46"  cy="41"  r="4" fill="none" stroke="#F0883E" stroke-width="1"/>
+      <circle cx="46"  cy="41"  r="1.5" fill="#F0883E" opacity="0.5"/>
+      <circle cx="254" cy="41"  r="4" fill="none" stroke="#F0883E" stroke-width="1"/>
+      <circle cx="254" cy="41"  r="1.5" fill="#F0883E" opacity="0.5"/>
+      <circle cx="46"  cy="164" r="4" fill="none" stroke="#F0883E" stroke-width="1"/>
+      <circle cx="46"  cy="164" r="1.5" fill="#F0883E" opacity="0.5"/>
+      <circle cx="254" cy="164" r="4" fill="none" stroke="#F0883E" stroke-width="1"/>
+      <circle cx="254" cy="164" r="1.5" fill="#F0883E" opacity="0.5"/>
+
+      <!-- Quote larghezza -->
+      <line x1="30" y1="190" x2="270" y2="190" class="dim-line"/>
+      <line x1="30" y1="186" x2="30" y2="194" stroke="#58A6FF" stroke-width="0.8"/>
+      <line x1="270" y1="186" x2="270" y2="194" stroke="#58A6FF" stroke-width="0.8"/>
+      <text x="150" y="200" text-anchor="middle" class="dim-text">118.04 mm</text>
+
+      <!-- Quote altezza -->
+      <line x1="8" y1="25" x2="8" y2="175" class="dim-line"/>
+      <line x1="4" y1="25" x2="12" y2="25" stroke="#58A6FF" stroke-width="0.8"/>
+      <line x1="4" y1="175" x2="12" y2="175" stroke="#58A6FF" stroke-width="0.8"/>
+      <text x="5" y="105" text-anchor="middle" class="dim-text" transform="rotate(-90,5,105)">71.74 mm</text>
+
+      <!-- Label bezel -->
+      <line x1="30" y1="25" x2="41" y2="36" stroke="#39D353" stroke-width="0.8" stroke-dasharray="2 2"/>
+      <text x="12" y="23" fill="#39D353" font-size="7" font-family="JetBrains Mono">bezel 5mm</text>
+
+      <!-- Label fori -->
+      <text x="260" y="40" fill="#F0883E" font-size="7" font-family="JetBrains Mono">M3</text>
+    </svg>
+  </div>
+
+  <!-- VISTA POSTERIORE -->
+  <div class="card">
+    <div class="card-title">Vista Posteriore (backplate)</div>
+    <svg viewBox="0 0 300 210" width="100%" style="display:block;">
+      <rect width="300" height="210" fill="#0D1117"/>
+      <line x1="0" y1="105" x2="300" y2="105" stroke="#1a2030" stroke-width="0.5"/>
+      <line x1="150" y1="0" x2="150" y2="210" stroke="#1a2030" stroke-width="0.5"/>
+
+      <!-- Box esterno -->
+      <rect x="30" y="25" width="240" height="150" rx="5" fill="#1C2128" stroke="#30363D" stroke-width="1.5"/>
+
+      <!-- Griglia areazione (fori) -->
+      <g opacity="0.7">
+        <text x="150" y="18" text-anchor="middle" fill="#8B949E" font-size="7" font-family="JetBrains Mono">griglia aeraz.</text>
+        <!-- Fori griglia 4x3 -->
+        <circle cx="116" cy="85" r="4" fill="none" stroke="#8B949E" stroke-width="0.8"/>
+        <circle cx="130" cy="85" r="4" fill="none" stroke="#8B949E" stroke-width="0.8"/>
+        <circle cx="144" cy="85" r="4" fill="none" stroke="#8B949E" stroke-width="0.8"/>
+        <circle cx="158" cy="85" r="4" fill="none" stroke="#8B949E" stroke-width="0.8"/>
+        <circle cx="116" cy="99" r="4" fill="none" stroke="#8B949E" stroke-width="0.8"/>
+        <circle cx="130" cy="99" r="4" fill="none" stroke="#8B949E" stroke-width="0.8"/>
+        <circle cx="144" cy="99" r="4" fill="none" stroke="#8B949E" stroke-width="0.8"/>
+        <circle cx="158" cy="99" r="4" fill="none" stroke="#8B949E" stroke-width="0.8"/>
+        <circle cx="116" cy="113" r="4" fill="none" stroke="#8B949E" stroke-width="0.8"/>
+        <circle cx="130" cy="113" r="4" fill="none" stroke="#8B949E" stroke-width="0.8"/>
+        <circle cx="144" cy="113" r="4" fill="none" stroke="#8B949E" stroke-width="0.8"/>
+        <circle cx="158" cy="113" r="4" fill="none" stroke="#8B949E" stroke-width="0.8"/>
+      </g>
+
+      <!-- ESP32-S3 shelf indicazione -->
+      <rect x="50" y="35" width="140" height="50" rx="3" fill="rgba(57,211,83,0.08)" stroke="#39D353" stroke-width="1" stroke-dasharray="3 2"/>
+      <text x="120" y="56" text-anchor="middle" fill="#39D353" font-size="8" font-family="JetBrains Mono">ESP32-S3</text>
+      <text x="120" y="68" text-anchor="middle" fill="#8B949E" font-size="7" font-family="JetBrains Mono">69 × 26 mm</text>
+
+      <!-- USB-C slot lato sinistro -->
+      <rect x="30" y="50" width="8" height="16" rx="2" fill="rgba(240,136,62,0.2)" stroke="#F0883E" stroke-width="1"/>
+      <text x="22" y="62" text-anchor="middle" fill="#F0883E" font-size="6" font-family="JetBrains Mono" transform="rotate(-90,22,62)">USB-C</text>
+
+      <!-- GPIO slot lato destro -->
+      <rect x="262" y="48" width="8" height="30" rx="1" fill="rgba(88,166,255,0.1)" stroke="#58A6FF" stroke-width="1"/>
+      <text x="278" y="68" text-anchor="middle" fill="#58A6FF" font-size="6" font-family="JetBrains Mono" transform="rotate(90,278,68)">GPIO</text>
+
+      <!-- 4 colonne viti -->
+      <circle cx="46"  cy="41"  r="5" fill="none" stroke="#F0883E" stroke-width="1"/>
+      <circle cx="254" cy="41"  r="5" fill="none" stroke="#F0883E" stroke-width="1"/>
+      <circle cx="46"  cy="164" r="5" fill="none" stroke="#F0883E" stroke-width="1"/>
+      <circle cx="254" cy="164" r="5" fill="none" stroke="#F0883E" stroke-width="1"/>
+
+      <!-- Quote profondità -->
+      <text x="275" y="105" fill="#BC8CFF" font-size="8" font-family="JetBrains Mono" transform="rotate(90,275,105)">16 mm</text>
+      <line x1="272" y1="25" x2="272" y2="175" stroke="#BC8CFF" stroke-width="0.5" stroke-dasharray="2 2"/>
+
+      <!-- Quota larghezza -->
+      <line x1="30" y1="190" x2="270" y2="190" class="dim-line"/>
+      <line x1="30" y1="186" x2="30" y2="194" stroke="#58A6FF" stroke-width="0.8"/>
+      <line x1="270" y1="186" x2="270" y2="194" stroke="#58A6FF" stroke-width="0.8"/>
+      <text x="150" y="200" text-anchor="middle" class="dim-text">118.04 mm</text>
+    </svg>
+  </div>
+
+  <!-- VISTA LATERALE + STAND -->
+  <div class="card">
+    <div class="card-title">Vista Laterale + Stand</div>
+    <svg viewBox="0 0 300 210" width="100%" style="display:block;">
+      <rect width="300" height="210" fill="#0D1117"/>
+
+      <!-- Stand base -->
+      <rect x="60" y="172" width="180" height="10" rx="3" fill="#21262D" stroke="#30363D" stroke-width="1"/>
+      <!-- Piedini -->
+      <rect x="68" y="179" width="12" height="5" rx="2" fill="#30363D"/>
+      <rect x="220" y="179" width="12" height="5" rx="2" fill="#30363D"/>
+
+      <!-- Braccio stand inclinato ~65° -->
+      <line x1="148" y1="172" x2="130" y2="80" stroke="#8B949E" stroke-width="5" stroke-linecap="round"/>
+      <!-- Rinforzo -->
+      <line x1="148" y1="172" x2="148" y2="145" stroke="#8B949E" stroke-width="3" stroke-linecap="round"/>
+
+      <!-- Scatola laterale -->
+      <rect x="75" y="55" width="150" height="45" rx="4" fill="#21262D" stroke="#30363D" stroke-width="1.5"/>
+
+      <!-- Clip aggancio stand -->
+      <rect x="124" y="78" width="8" height="22" rx="2" fill="#161B22" stroke="#8B949E" stroke-width="1"/>
+
+      <!-- USB foro -->
+      <rect x="75" y="70" width="5" height="14" rx="1" fill="rgba(240,136,62,0.3)" stroke="#F0883E" stroke-width="1"/>
+
+      <!-- Quote -->
+      <!-- Profondità box -->
+      <line x1="75" y1="50" x2="225" y2="50" class="dim-line"/>
+      <line x1="75" y1="46" x2="75" y2="54" stroke="#58A6FF" stroke-width="0.8"/>
+      <line x1="225" y1="46" x2="225" y2="54" stroke="#58A6FF" stroke-width="0.8"/>
+      <text x="150" y="46" text-anchor="middle" class="dim-text">16 mm profondità</text>
+
+      <!-- Altezza stand -->
+      <line x1="240" y1="55" x2="240" y2="182" class="dim-line"/>
+      <line x1="236" y1="55"  x2="244" y2="55"  stroke="#39D353" stroke-width="0.8"/>
+      <line x1="236" y1="182" x2="244" y2="182" stroke="#39D353" stroke-width="0.8"/>
+      <text x="264" y="122" text-anchor="middle" class="dim-text" fill="#39D353" transform="rotate(90,264,122)">~127 mm</text>
+
+      <!-- Angolo -->
+      <path d="M 148 172 L 148 130 A 42 42 0 0 0 130 86" fill="none" stroke="#BC8CFF" stroke-width="0.8" stroke-dasharray="3 2"/>
+      <text x="155" y="130" fill="#BC8CFF" font-size="8" font-family="JetBrains Mono">65°</text>
+
+      <!-- Label USB -->
+      <text x="60" y="73" fill="#F0883E" font-size="7" font-family="JetBrains Mono">USB</text>
+
+      <!-- Foro GPIO -->
+      <rect x="220" y="63" width="5" height="20" rx="1" fill="rgba(88,166,255,0.2)" stroke="#58A6FF" stroke-width="1"/>
+      <text x="228" y="73" fill="#58A6FF" font-size="7" font-family="JetBrains Mono">GPIO</text>
+    </svg>
+  </div>
+
+  <!-- SPECS + STAMPA -->
+  <div class="card">
+    <div class="card-title">Specifiche di stampa</div>
+
+    <div class="specs-grid">
+      <div class="spec">
+        <div class="spec-label">Dimensioni totali</div>
+        <div class="spec-val">118 × 72</div>
+        <div class="spec-sub">× 16 mm (profondità)</div>
+      </div>
+      <div class="spec">
+        <div class="spec-label">Viti</div>
+        <div class="spec-val">4× M3</div>
+        <div class="spec-sub">× 12 mm lunghezza</div>
+      </div>
+      <div class="spec">
+        <div class="spec-label">Layer height</div>
+        <div class="spec-val">0.2 mm</div>
+        <div class="spec-sub">0.12 per qualità max</div>
+      </div>
+      <div class="spec">
+        <div class="spec-label">Infill</div>
+        <div class="spec-val">20%</div>
+        <div class="spec-sub">gyroid consigliato</div>
+      </div>
+    </div>
+
+    <div class="print-list" style="margin-top:12px;">
+      <div class="print-item">
+        <div class="print-dot" style="background:#58A6FF;"></div>
+        <div class="print-name">front_frame.stl</div>
+        <div class="print-detail">~18g PLA · 1h20m</div>
+      </div>
+      <div class="print-item">
+        <div class="print-dot" style="background:#39D353;"></div>
+        <div class="print-name">back_body.stl</div>
+        <div class="print-detail">~22g PLA · 1h45m</div>
+      </div>
+      <div class="print-item">
+        <div class="print-dot" style="background:#F0883E;"></div>
+        <div class="print-name">desk_stand.stl</div>
+        <div class="print-detail">~14g PLA · 55m</div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;padding:10px 12px;background:#0D1117;border-radius:8px;border:1px solid #21262D;">
+      <div style="font-size:10px;color:#8B949E;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Note stampa</div>
+      <div style="font-size:11px;color:#C9D1D9;line-height:1.6;">
+        • Stampa <span style="color:#58A6FF">front_frame</span> face-down (bezel giù)<br>
+        • Stampa <span style="color:#39D353">back_body</span> face-up<br>
+        • Nessun supporto necessario<br>
+        • Primo layer <span style="color:#F0883E">0.3mm</span> per aderenza<br>
+        • Perimetri: <span style="color:#F0883E">4</span> (pareti forti)
+      </div>
+    </div>
+  </div>
+
+  <!-- ISOMETRIC PREVIEW -->
+  <div class="card iso-wrap" style="grid-column: span 2;">
+    <div style="width:100%;">
+      <div class="card-title">Preview 3D isometrico</div>
+      <svg viewBox="0 0 700 260" width="100%" style="display:block;">
+        <defs>
+          <linearGradient id="topGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#30363D"/>
+            <stop offset="100%" stop-color="#21262D"/>
+          </linearGradient>
+          <linearGradient id="frontGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#21262D"/>
+            <stop offset="100%" stop-color="#161B22"/>
+          </linearGradient>
+          <linearGradient id="sideGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#1C2128"/>
+            <stop offset="100%" stop-color="#161B22"/>
+          </linearGradient>
+          <linearGradient id="screenGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#0f1923"/>
+            <stop offset="100%" stop-color="#1a2a3a"/>
+          </linearGradient>
+        </defs>
+        <rect width="700" height="260" fill="#0D1117"/>
+
+        <!-- ── SCATOLA ISOMETRICA ── -->
+        <!-- scala: 1mm ≈ 1.3px, offset base: 200,180 -->
+        <!-- w=118, h=72, d=16 -->
+        <!-- Isometrico: x_right=(w*cos30, -w*sin30), x_up=(0, -h), x_front=(d*cos30, d*sin30) -->
+
+        <!-- Faccia TOP -->
+        <polygon points="
+          200,130
+          353,86
+          353,113
+          200,157
+        " fill="url(#topGrad)" stroke="#30363D" stroke-width="1"/>
+        <!-- Texture top (display sede) -->
+        <polygon points="
+          213,140
+          338,100
+          338,112
+          213,152
+        " fill="#1C2128" stroke="#8B949E" stroke-width="0.5" stroke-dasharray="2 2" opacity="0.8"/>
+
+        <!-- Faccia FRONT -->
+        <polygon points="
+          200,157
+          353,113
+          353,178
+          200,222
+        " fill="url(#frontGrad)" stroke="#30363D" stroke-width="1"/>
+        <!-- Foro display frontale -->
+        <polygon points="
+          220,166
+          326,132
+          326,172
+          220,206
+        " fill="url(#screenGrad)" stroke="#4FC3F7" stroke-width="1.2"/>
+        <!-- Contenuto schermo fake -->
+        <polygon points="
+          222,168
+          324,134
+          324,170
+          222,204
+        " fill="#161B22"/>
+        <!-- Mini UI nel display -->
+        <line x1="222" y1="154" x2="324" y2="120" stroke="#21262D" stroke-width="0.5"/>
+        <circle cx="240" cy="180" r="10" fill="none" stroke="#58A6FF" stroke-width="1" opacity="0.6"/>
+        <text x="275" y="165" fill="#58A6FF" font-size="7" font-family="JetBrains Mono" opacity="0.7">22.4°</text>
+        <rect x="240" y="188" width="80" height="5" rx="2" fill="#21262D"/>
+        <rect x="240" y="198" width="50" height="5" rx="2" fill="#21262D"/>
+
+        <!-- Faccia SIDE -->
+        <polygon points="
+          353,86
+          373,98
+          373,163
+          353,178
+          353,113
+        " fill="url(#sideGrad)" stroke="#30363D" stroke-width="1"/>
+        <!-- USB-C slot lato -->
+        <rect x="354" y="128" width="6" height="11" rx="1" fill="rgba(240,136,62,0.3)" stroke="#F0883E" stroke-width="0.8"/>
+
+        <!-- Viti angoli frontali -->
+        <circle cx="213" cy="168" r="3" fill="none" stroke="#F0883E" stroke-width="0.8"/>
+        <circle cx="340" cy="125" r="3" fill="none" stroke="#F0883E" stroke-width="0.8"/>
+        <circle cx="340" cy="170" r="3" fill="none" stroke="#F0883E" stroke-width="0.8"/>
+        <circle cx="213" cy="213" r="3" fill="none" stroke="#F0883E" stroke-width="0.8"/>
+
+        <!-- ── STAND ── -->
+        <!-- Base stand -->
+        <polygon points="
+          130,230
+          270,196
+          270,204
+          130,238
+        " fill="#21262D" stroke="#30363D" stroke-width="1"/>
+        <!-- Braccio -->
+        <line x1="200" y1="234" x2="200" y2="157" stroke="#8B949E" stroke-width="4" stroke-linecap="round" opacity="0.8"/>
+        <!-- Clip aggancio (rettangolino alla cima del braccio) -->
+        <rect x="197" y="153" width="6" height="18" rx="1" fill="#30363D" stroke="#8B949E" stroke-width="0.8"/>
+
+        <!-- Ombra sotto -->
+        <ellipse cx="280" cy="245" rx="100" ry="8" fill="rgba(0,0,0,0.4)"/>
+
+        <!-- ── LABELS ── -->
+        <!-- Label display area -->
+        <text x="275" y="80" fill="#4FC3F7" font-size="9" font-family="JetBrains Mono">ILI9488 3.5"</text>
+        <line x1="272" y1="83" x2="272" y2="132" stroke="#4FC3F7" stroke-width="0.5" stroke-dasharray="2 2" opacity="0.6"/>
+
+        <!-- Label ESP32 -->
+        <text x="380" y="125" fill="#39D353" font-size="9" font-family="JetBrains Mono">ESP32-S3</text>
+        <text x="380" y="136" fill="#8B949E" font-size="7" font-family="JetBrains Mono">nel corpo post.</text>
+
+        <!-- Label USB -->
+        <text x="382" y="137" fill="#F0883E" font-size="8" font-family="JetBrains Mono">USB-C</text>
+
+        <!-- Dimensioni -->
+        <!-- W -->
+        <line x1="200" y1="232" x2="353" y2="188" stroke="#58A6FF" stroke-width="0.5" stroke-dasharray="2 2"/>
+        <text x="265" y="228" fill="#58A6FF" font-size="8" font-family="JetBrains Mono">118 mm</text>
+        <!-- H -->
+        <line x1="190" y1="157" x2="190" y2="222" stroke="#BC8CFF" stroke-width="0.5" stroke-dasharray="2 2"/>
+        <text x="152" y="193" fill="#BC8CFF" font-size="8" font-family="JetBrains Mono">72 mm</text>
+        <!-- D -->
+        <line x1="353" y1="86" x2="373" y2="98" stroke="#F0883E" stroke-width="0.5" stroke-dasharray="2 2"/>
+        <text x="374" y="95" fill="#F0883E" font-size="8" font-family="JetBrains Mono">16 mm</text>
+
+        <!-- ── LEGEND ── -->
+        <rect x="450" y="60" width="220" height="160" rx="8" fill="#161B22" stroke="#21262D" stroke-width="1"/>
+        <text x="466" y="80" fill="#E6EDF3" font-size="10" font-family="Space Grotesk" font-weight="600">Legenda componenti</text>
+        <line x1="450" y1="88" x2="670" y2="88" stroke="#21262D" stroke-width="0.5"/>
+
+        <circle cx="465" cy="103" r="4" fill="#4FC3F7"/>
+        <text x="476" y="107" fill="#C9D1D9" font-size="9" font-family="JetBrains Mono">Area display visibile</text>
+
+        <circle cx="465" cy="120" r="4" fill="#39D353"/>
+        <text x="476" y="124" fill="#C9D1D9" font-size="9" font-family="JetBrains Mono">Sede ESP32-S3</text>
+
+        <circle cx="465" cy="137" r="4" fill="#F0883E"/>
+        <text x="476" y="141" fill="#C9D1D9" font-size="9" font-family="JetBrains Mono">Accesso USB-C</text>
+
+        <circle cx="465" cy="154" r="4" fill="#BC8CFF"/>
+        <text x="476" y="158" fill="#C9D1D9" font-size="9" font-family="JetBrains Mono">Griglia areazione</text>
+
+        <circle cx="465" cy="171" r="4" fill="#F85149"/>
+        <text x="476" y="175" fill="#C9D1D9" font-size="9" font-family="JetBrains Mono">Fori viti M3</text>
+
+        <circle cx="465" cy="188" r="4" fill="#8B949E"/>
+        <text x="476" y="192" fill="#C9D1D9" font-size="9" font-family="JetBrains Mono">Stand 65° (rimovibile)</text>
+      </svg>
+    </div>
+  </div>
+
+</div>
+
+<div style="text-align:center;margin-top:16px;font-size:11px;color:#8B949E;font-family:'JetBrains Mono',monospace;">
+  Apri <span style="color:#58A6FF">dashboard_enclosure.scad</span> in OpenSCAD → F6 per render → Export STL
+</div>
+</body>
+</html>
